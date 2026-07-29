@@ -24,7 +24,6 @@ async def add_user(user_id: int, first_name: str, last_name: str, referred_by: i
         )
         await db.commit()
 
-
 async def process_subscription(user_id: int):
     async with aiosqlite.connect(DB_NAME) as db:
         # Fetch the user's current status and their referrer
@@ -43,3 +42,39 @@ async def process_subscription(user_id: int):
             await db.commit()
             return True # Indicates they just joined right now
         return False # Indicates they already joined previously
+
+async def get_top_users(limit: int = 10):
+    async with aiosqlite.connect(DB_NAME) as db:
+        # Get users sorted by score (highest first), ignoring those with 0 points
+        cursor = await db.execute(
+            "SELECT first_name, score FROM users WHERE score > 0 ORDER BY score DESC LIMIT ?", 
+            (limit,)
+        )
+        return await cursor.fetchall()
+
+async def get_user_score(user_id: int):
+    async with aiosqlite.connect(DB_NAME) as db:
+        cursor = await db.execute("SELECT score FROM users WHERE user_id = ?", (user_id,))
+        user = await cursor.fetchone()
+        return user[0] if user else 0
+
+async def get_user_status(user_id: int):
+    async with aiosqlite.connect(DB_NAME) as db:
+        cursor = await db.execute("SELECT has_joined FROM users WHERE user_id = ?", (user_id,))
+        user = await cursor.fetchone()
+        return user[0] if user else 0
+
+
+
+
+async def get_total_users_count():
+    async with aiosqlite.connect(DB_NAME) as db:
+        cursor = await db.execute("SELECT COUNT(*) FROM users")
+        count = await cursor.fetchone()
+        return count[0] if count else 0
+
+async def get_all_user_ids():
+    async with aiosqlite.connect(DB_NAME) as db:
+        cursor = await db.execute("SELECT user_id FROM users")
+        rows = await cursor.fetchall()
+        return [row[0] for row in rows]
