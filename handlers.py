@@ -27,7 +27,7 @@ from database import (
 router = Router()
 
 # Admin's Telegram ID
-ADMIN_ID = 6201090116
+ADMIN_ID = 1448159070
 
 # FSM State for admin broadcasting
 class AdminStates(StatesGroup):
