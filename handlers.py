@@ -1,6 +1,7 @@
 import asyncio
 import io
 import csv
+from urllib.parse import quote
 from aiogram import Router, F, Bot
 from aiogram.types import (
     Message, 
@@ -9,11 +10,13 @@ from aiogram.types import (
     CallbackQuery, 
     ReplyKeyboardMarkup, 
     KeyboardButton,
-    BufferedInputFile
+    BufferedInputFile,
+    FSInputFile
 )
 from aiogram.filters import CommandStart, CommandObject, Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 # Import all our database functions
 from database import (
@@ -43,13 +46,83 @@ main_menu = ReplyKeyboardMarkup(
     input_field_placeholder="Quyidagilardan birini tanlang..."
 )
 
+CHANNELS_TO_CHECK = ["@atommasterklass", "@atom_urganch"]
+
+# --------------------------------------------------
+# HELPER: STRICT SUBSCRIPTION CHECK
+# --------------------------------------------------
+async def force_subscription(bot: Bot, user_id: int) -> bool:
+    """Returns True if user is in all channels, False otherwise."""
+    for channel in CHANNELS_TO_CHECK:
+        try:
+            member = await bot.get_chat_member(chat_id=channel, user_id=user_id)
+            if member.status in ["left", "kicked"]:
+                return False
+        except Exception:
+            return False # Treat errors (bot not admin) as unsubscribed to be safe
+    return True
+
+async def send_subscription_warning(message_or_callback):
+    """Sends the warning message with inline buttons to subscribe."""
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📢 1 - Kanal", url="https://t.me/atommasterklass")],
+        [InlineKeyboardButton(text="📢 2 - Kanal", url="https://t.me/atom_urganch")],
+        [InlineKeyboardButton(text="✅ Tasdiqlash", callback_data="check_sub")]
+    ])
+    text = (
+        "🛑 <b>Kechirasiz, botdan foydalanish uchun kanallarimizdan chiqib ketmasligingiz kerak!</b>\n\n"
+        "Iltimos, quyidagi kanallarga qayta obuna bo'ling va 'Tasdiqlash' tugmasini bosing:"
+    )
+    
+    if isinstance(message_or_callback, Message):
+        await message_or_callback.answer(text, reply_markup=keyboard, parse_mode="HTML")
+    else:
+        await message_or_callback.message.answer(text, reply_markup=keyboard, parse_mode="HTML")
+
+# --------------------------------------------------
+# HELPER: SEND PROMO POST
+# --------------------------------------------------
+async def send_promo_post(bot: Bot, user_id: int, send_method):
+    bot_info = await bot.get_me()
+    referral_link = f"https://t.me/{bot_info.username}?start={user_id}"
+    
+    promo_text = (
+        "Assalomu aleykum!\n\n"
+        "ATOM o'quv markazi 3-avgust kuni kuzgi milliy sertifikat imtihoniga intensiv online kurslariga start beradi!\n"
+        "Eng qizig'i siz bu kursda tekinga o'qishingiz mumkin.\n"
+        "Shartlar judayam oson!\n\n"
+        "Bot sizga referal ssilka beradi, ana shu ssilkani siz kimyoga qiziquvchi do'stlaringizga yuborasiz.\n"
+        "Ular botdan ro'yxatdan o'tib kanallarga obuna bo'lsa, sizga har bir taklif qilgan do'stingiz uchun +5 ball beriladi!\n\n"
+        "Eng ko'p ball to'plagan 5 nafar qatnashuvchini tanlab olib ONLINE kurslarimizda bepul o'qitamiz!\n"
+        "Biz bilan A+ sari harakatni boshlang!\n"
+        "Batafsil malumot uchun:\n"
+        "@ONLINE_ATOM\n"
+        "TEL: +998938968909\n\n"
+        f"👇 Shaxsiy havolangiz:\n<code>{referral_link}</code>"
+    )
+
+    share_text = quote("ATOM o'quv markazining bepul intensiv kursiga qo'shiling! 🚀")
+    share_url = f"https://t.me/share/url?url={referral_link}&text={share_text}"
+
+    builder = InlineKeyboardBuilder()
+    builder.button(text="🔥 Ishtirok etish 🔥", url=share_url)
+
+    # Ensure "promo.jpg" is uploaded to your Render project folder!
+    photo = FSInputFile("promo.jpg")
+
+    await send_method(
+        photo=photo, 
+        caption=promo_text,
+        reply_markup=builder.as_markup()
+    )
+
+
 # --------------------------------------------------
 # USER HANDLERS
 # --------------------------------------------------
 
 @router.message(CommandStart())
 async def start_handler(message: Message, command: CommandObject, bot: Bot):
-    # 1. Extract referrer ID
     args = command.args
     referred_by = None
     if args and args.isdigit():
@@ -57,11 +130,9 @@ async def start_handler(message: Message, command: CommandObject, bot: Bot):
         if referred_by == message.from_user.id:
             referred_by = None
 
-    # 2. Check if the contest is active and if user has already joined
     is_active = await get_contest_status()
     has_joined = await get_user_status(message.from_user.id)
     
-    # 3. Contest is stopped logic
     if not is_active:
         if has_joined:
             await message.answer(
@@ -71,13 +142,9 @@ async def start_handler(message: Message, command: CommandObject, bot: Bot):
                 parse_mode="HTML"
             )
         else:
-            await message.answer(
-                "❌ Kechirasiz, tanlov o'z nihoyasiga yetgan. Tez orada g'oliblarni e'lon qilamiz!", 
-                parse_mode="HTML"
-            )
+            await message.answer("❌ Kechirasiz, tanlov o'z nihoyasiga yetgan. Tez orada g'oliblarni e'lon qilamiz!", parse_mode="HTML")
         return
 
-    # 4. Add user to database (if active)
     await add_user(
         user_id=message.from_user.id,
         first_name=message.from_user.first_name,
@@ -85,8 +152,12 @@ async def start_handler(message: Message, command: CommandObject, bot: Bot):
         referred_by=referred_by
     )
 
-    # 5. If they already verified subscription previously
     if has_joined:
+        # Before letting them use the bot, verify they haven't left the channels
+        if not await force_subscription(bot, message.from_user.id):
+            await send_subscription_warning(message)
+            return
+            
         await message.answer(
             f"Siz allaqachon tanlovda ishtirok etyapsiz, <b>{message.from_user.first_name}</b>! 🎉\n\n"
             "Quyidagi menyudan foydalanishingiz mumkin:",
@@ -95,7 +166,6 @@ async def start_handler(message: Message, command: CommandObject, bot: Bot):
         )
         return
 
-    # 6. New users must subscribe
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📢 1 - Kanal", url="https://t.me/atommasterklass")],
         [InlineKeyboardButton(text="📢 2 - Kanal", url="https://t.me/atom_urganch")],
@@ -111,35 +181,23 @@ async def start_handler(message: Message, command: CommandObject, bot: Bot):
 
 @router.callback_query(F.data == "check_sub")
 async def check_subscription_handler(callback: CallbackQuery, bot: Bot):
-    # Don't allow verifying if the contest was stopped while they were joining
     is_active = await get_contest_status()
     if not is_active:
         await callback.answer("❌ Tanlov yakunlangan, endi ro'yxatdan o'tish imkoni yo'q.", show_alert=True)
         return
-
-    channels_to_check = ["@atommasterklass", "@atom_urganch"]
     
-    for channel in channels_to_check:
-        try:
-            member = await bot.get_chat_member(chat_id=channel, user_id=callback.from_user.id)
-            if member.status in ["left", "kicked"]:
-                await callback.answer("❌ Siz hali hamma kanalga obuna bo'lmadingiz!", show_alert=True)
-                return
-        except Exception:
-            await callback.answer("Xatolik yuz berdi. Bot kanallarda admin ekanligini tekshiring!", show_alert=True)
-            return
+    if not await force_subscription(bot, callback.from_user.id):
+        await callback.answer("❌ Siz hali hamma kanalga obuna bo'lmadingiz yoxud chiqib ketgansiz!", show_alert=True)
+        return
 
     await process_subscription(callback.from_user.id)
     
-    bot_info = await bot.get_me()
-    referral_link = f"https://t.me/{bot_info.username}?start={callback.from_user.id}"
-    
     await callback.message.edit_text("🎉 <b>Obuna tasdiqlandi!</b>", parse_mode="HTML")
     
+    # Send them the full image promo post directly!
+    await send_promo_post(bot, callback.from_user.id, callback.message.answer_photo)
+    
     await callback.message.answer(
-        "Do'stlaringizga yuborish uchun shaxsiy havolangiz:\n\n"
-        f"<code>{referral_link}</code>\n\n"
-        "Ushbu havola orqali qo'shilgan har bir do'stingiz uchun 1 ballga ega bo'lasiz!\n\n"
         "👇 <i>Asosiy menyudan kerakli bo'limni tanlang:</i>",
         reply_markup=main_menu,
         parse_mode="HTML"
@@ -147,16 +205,17 @@ async def check_subscription_handler(callback: CallbackQuery, bot: Bot):
 
 @router.message(Command("reyting"))
 @router.message(F.text == "🏆 Reyting")
-async def leaderboard_handler(message: Message):
+async def leaderboard_handler(message: Message, bot: Bot):
+    # Strict check before showing leaderboard
+    if not await force_subscription(bot, message.from_user.id):
+        await send_subscription_warning(message)
+        return
+
     top_users = await get_top_users()
     user_score = await get_user_score(message.from_user.id)
     
     if not top_users:
-        await message.answer(
-            "🏆 <b>Hozircha reytingda hech kim yo'q.</b>\n\n"
-            "Do'stlaringizni taklif qilib, birinchi bo'lishga shoshiling!", 
-            parse_mode="HTML"
-        )
+        await message.answer("🏆 <b>Hozircha reytingda hech kim yo'q.</b>\n\nDo'stlaringizni taklif qilib, birinchi bo'lishga shoshiling!", parse_mode="HTML")
         return
         
     text = "🏆 <b>Eng faol ishtirokchilar reytingi:</b>\n\n"
@@ -169,31 +228,33 @@ async def leaderboard_handler(message: Message):
 
 @router.message(Command("statistika"))
 @router.message(F.text == "📊 Statistika")
-async def my_stats_handler(message: Message):
+async def my_stats_handler(message: Message, bot: Bot):
+    # Strict check before showing stats
+    if not await force_subscription(bot, message.from_user.id):
+        await send_subscription_warning(message)
+        return
+
     user_score = await get_user_score(message.from_user.id)
     text = (
         f"👤 <b>Shaxsiy statistikangiz:</b>\n\n"
-        f"👥 Taklif qilgan do'stlaringiz soni: <b>{user_score} ta</b>"
+        f"👥 To'plagan balingiz: <b>{user_score} ball</b>"
     )
     await message.answer(text, parse_mode="HTML")
 
 @router.message(F.text == "🔗 Shaxsiy havola")
-async def referral_link_handler(message: Message):
-    bot_info = await message.bot.get_me()
-    referral_link = f"https://t.me/{bot_info.username}?start={message.from_user.id}"
-    
-    text = (
-        f"🔗 <b>Sizning shaxsiy havolangiz:</b>\n\n"
-        f"<code>{referral_link}</code>\n\n"
-        f"<i>Ushbu havolani do'stlaringizga yuboring va ko'proq ball yig'ing!</i>"
-    )
-    await message.answer(text, parse_mode="HTML")
+async def referral_link_handler(message: Message, bot: Bot):
+    # Strict check before generating link
+    if not await force_subscription(bot, message.from_user.id):
+        await send_subscription_warning(message)
+        return
+
+    # Use the helper function to send the full image post
+    await send_promo_post(bot, message.from_user.id, message.answer_photo)
 
 # --------------------------------------------------
-# ADMIN HANDLERS
+# ADMIN HANDLERS (Unchanged, left exactly as you had them)
 # --------------------------------------------------
 
-# Helper function to generate admin keyboard
 def get_admin_keyboard(is_active: bool):
     toggle_text = "🛑 Tanlovni to'xtatish" if is_active else "✅ Tanlovni boshlash"
     return InlineKeyboardMarkup(inline_keyboard=[
@@ -240,7 +301,6 @@ async def toggle_contest_handler(callback: CallbackQuery):
     popup_msg = "✅ Tanlov boshlandi!" if new_status else "🛑 Tanlov to'xtatildi! Endi hech kim ball yig'a olmaydi."
     await callback.answer(popup_msg, show_alert=True)
 
-# --- BROADCASTING LOGIC ---
 @router.callback_query(F.data == "admin_broadcast")
 async def broadcast_prompt(callback: CallbackQuery, state: FSMContext):
     if callback.from_user.id != ADMIN_ID: return
@@ -272,7 +332,6 @@ async def execute_broadcast(message: Message, state: FSMContext, bot: Bot):
     await message.answer(f"✅ Xabar tarqatish yakunlandi!\n\n👥 Qabul qildi: <b>{success_count} ta</b> foydalanuvchi.", parse_mode="HTML")
     await state.clear()
 
-# --- RESULTS & RESET LOGIC ---
 @router.callback_query(F.data == "download_results")
 async def download_results_handler(callback: CallbackQuery):
     if callback.from_user.id != ADMIN_ID: return
@@ -290,7 +349,7 @@ async def download_results_handler(callback: CallbackQuery):
     for row in results:
         writer.writerow([row[0], row[1], row[2], row[3]])
         
-    csv_bytes = file.getvalue().encode('utf-8-sig') # utf-8-sig helps Excel read special characters properly
+    csv_bytes = file.getvalue().encode('utf-8-sig')
     document = BufferedInputFile(csv_bytes, filename="Tanlov_Natijalari.csv")
     
     await callback.message.answer_document(
@@ -325,7 +384,6 @@ async def cancel_reset_handler(callback: CallbackQuery):
     is_active = await get_contest_status()
     status_text = "🟢 Faol" if is_active else "🔴 To'xtatilgan"
     
-    # Take them safely back to the admin menu
     await callback.message.edit_text(
         "👑 <b>Admin paneliga xush kelibsiz!</b>\n\n"
         f"👥 Botdagi jami ishtirokchilar: <b>{total_users} ta</b>\n"
