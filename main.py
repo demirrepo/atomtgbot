@@ -8,7 +8,7 @@ from handlers import router
 
 # Load environment variables
 load_dotenv()
-BOT_TOKEN = os.getenv("8954403531:AAHGlWIVI6Qx0Eprd4IKqefIYp-ULKmihp0") 
+BOT_TOKEN = os.getenv("BOT_TOKEN") 
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
