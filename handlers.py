@@ -92,7 +92,7 @@ async def send_promo_post(bot: Bot, user_id: int, send_method):
         "Eng qizig'i siz bu kursda tekinga o'qishingiz mumkin.\n"
         "Shartlar judayam oson!\n\n"
         "Bot sizga referal ssilka beradi, ana shu ssilkani siz kimyoga qiziquvchi do'stlaringizga yuborasiz.\n"
-        "Ular botdan ro'yxatdan o'tib kanallarga obuna bo'lsa, sizga har bir taklif qilgan do'stingiz uchun +5 ball beriladi!\n\n"
+        "Ular botdan ro'yxatdan o'tib kanallarga obuna bo'lsa, sizga har bir taklif qilgan do'stingiz uchun +1 ball beriladi!\n\n"
         "Eng ko'p ball to'plagan 5 nafar qatnashuvchini tanlab olib ONLINE kurslarimizda bepul o'qitamiz!\n"
         "Biz bilan A+ sari harakatni boshlang!\n"
         "Batafsil malumot uchun:\n"
