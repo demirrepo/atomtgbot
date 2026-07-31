@@ -10,7 +10,7 @@ async def init_db():
     DATABASE_URL = os.getenv("DATABASE_URL")
     
     # Create a connection pool to safely handle multiple requests
-    pool = await asyncpg.create_pool(DATABASE_URL)
+    pool = await asyncpg.create_pool(DATABASE_URL, statement_cache_size=0)
     
     async with pool.acquire() as conn:
         # We use BIGINT for user_id because Telegram IDs can exceed standard integer limits
