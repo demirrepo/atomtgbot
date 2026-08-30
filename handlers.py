@@ -88,7 +88,7 @@ async def send_promo_post(bot: Bot, user_id: int, send_method):
     
     promo_text = (
         "Assalomu aleykum!\n\n"
-        "ATOM o'quv markazi 3-avgust kuni kuzgi milliy sertifikat imtihoniga intensiv online kurslariga start beradi!\n"
+        "ATOM o'quv markazi 31-avgust kuni kuzgi milliy sertifikat imtihoniga intensiv online kurslariga start beradi!\n"
         "Eng qizig'i siz bu kursda tekinga o'qishingiz mumkin.\n"
         "Shartlar judayam oson!\n\n"
         "Bot sizga referal ssilka beradi, ana shu ssilkani siz kimyoga qiziquvchi do'stlaringizga yuborasiz.\n"
@@ -98,7 +98,7 @@ async def send_promo_post(bot: Bot, user_id: int, send_method):
         "Batafsil malumot uchun:\n"
         "@ONLINE_ATOM\n"
         "TEL: +998938968909\n\n"
-        f"👇 Shaxsiy havolangiz:\n<code>{referral_link}</code>"
+        f"👇 Shaxsiy havolangiz (nusxalash uchun ustiga bosing):\n<code>{referral_link}</code>"
     )
 
     share_text = quote("ATOM o'quv markazining bepul intensiv kursiga qo'shiling! 🚀")
