@@ -98,7 +98,7 @@ async def send_promo_post(bot: Bot, user_id: int, send_method):
         "Batafsil malumot uchun:\n"
         "@ONLINE_ATOM\n"
         "TEL: +998938968909\n\n"
-        f"👇 Shaxsiy havolangiz (nusxalash uchun ustiga bosing):\n<code>{referral_link}</code>"
+        f"👇 Shaxsiy havolangiz:\n{referral_link}"
     )
 
     share_text = quote("ATOM o'quv markazining bepul intensiv kursiga qo'shiling! 🚀")
