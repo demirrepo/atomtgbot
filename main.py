@@ -42,7 +42,7 @@ async def main():
     
     # 2. Start the Telegram bot
     print("Bot ishlamoqda...")
-    await dp.start_polling(bot)
+    await dp.start_polling(bot, allowed_updates=["message", "callback_query", "chat_member"])
 
 if __name__ == "__main__":
     asyncio.run(main())
